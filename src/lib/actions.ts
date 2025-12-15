@@ -55,10 +55,20 @@ const query = (collectionName: string, ...conditions: any[]) => {
     };
 };
 const writeBatch = (d: any) => {
+    const promises: Promise<any>[] = [];
     return {
-        update: (ref: any, data: any) => ref.update(data),
-        delete: (ref: any) => ref.delete(),
-        commit: async () => { } // Auto commit in our adapter
+        update: (ref: any, data: any) => {
+            promises.push(ref.update(data));
+        },
+        delete: (ref: any) => {
+            promises.push(ref.delete());
+        },
+        commit: async () => {
+            await Promise.all(promises);
+        },
+        set: (ref: any, data: any, options?: any) => {
+            promises.push(ref.set(data, options));
+        }
     };
 };
 const firestoreWriteBatch = writeBatch;
