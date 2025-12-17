@@ -1422,26 +1422,10 @@ export async function getTransactionsByOrderId(orderId: string): Promise<Transac
 
 export async function getTransactionsByUserId(userId: string): Promise<Transaction[]> {
     try {
-        // Find TempOrders assigned to this user to get their sub-order IDs for transaction lookup
-        const tempOrdersQuery = query(collection(db, TEMP_ORDERS_COLLECTION), where("assignedUserId", "==", userId));
-        const tempOrdersSnapshot = await getDocs(tempOrdersQuery);
-
-        const tempSubOrderCustomerIds = tempOrdersSnapshot.docs.flatMap(doc =>
-            (doc.data() as TempOrder).subOrders.map(so => `TEMP-${so.subOrderId}`)
+        const q = query(
+            collection(db, TRANSACTIONS_COLLECTION),
+            where("customerId", "==", userId)
         );
-
-        let customerIdClauses: any[] = [where("customerId", "==", userId)];
-
-        // Firestore 'in' query has a limit of 30 values per query.
-        if (tempSubOrderCustomerIds.length > 0) {
-            const chunkSize = 30;
-            for (let i = 0; i < tempSubOrderCustomerIds.length; i += chunkSize) {
-                const chunk = tempSubOrderCustomerIds.slice(i, i + chunkSize);
-                customerIdClauses.push(where("customerId", "in", chunk));
-            }
-        }
-
-        const q = query(collection(db, TRANSACTIONS_COLLECTION), or(...customerIdClauses));
 
         const querySnapshot = await getDocs(q);
         const transactions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction));
