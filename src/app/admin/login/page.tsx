@@ -9,7 +9,7 @@ import logo from "@/app/assets/logo.png";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { useToast } from "@/components/ui/use-toast";
-import { getManagerByUsername, ensureDefaultAdminExists } from "@/lib/actions";
+import { getManagerByUsername, ensureDefaultAdminExists, createSession } from "@/lib/actions";
 import { Loader2 } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 
@@ -54,6 +54,7 @@ export default function AdminLoginPage() {
           description: `مرحباً بك، ${manager.name}`,
         });
         localStorage.setItem('loggedInUser', JSON.stringify({ id: manager.id, type: 'admin' }));
+        await createSession({ userId: manager.id, tenantId: manager.tenantId, role: 'admin' });
         router.push("/admin/dashboard");
       } else {
         toast({
@@ -115,10 +116,10 @@ export default function AdminLoginPage() {
               disabled={isLoading}
             >
               {isLoading ? (
-                  <>
-                      <Loader2 className="ml-2 h-5 w-5 animate-spin" />
-                      جاري التحقق...
-                  </>
+                <>
+                  <Loader2 className="ml-2 h-5 w-5 animate-spin" />
+                  جاري التحقق...
+                </>
               ) : 'تسجيل الدخول'}
             </Button>
           </form>

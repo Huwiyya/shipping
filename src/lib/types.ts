@@ -1,5 +1,24 @@
 
 // lib/types.ts
+
+export interface Tenant {
+  id: string;
+  name: string;
+  subscriptionEndDate: string; // ISO String
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface License {
+  id: string;
+  key: string;
+  durationDays: number;
+  status: 'active' | 'used' | 'expired';
+  createdAt: string;
+  usedAt?: string;
+  usedByTenantId?: string;
+}
+
 export interface Manager {
   id: string;
   name: string;
@@ -7,6 +26,7 @@ export interface Manager {
   password: string;
   phone?: string;
   permissions?: string[];
+  tenantId: string; // Added
 }
 
 export interface User {
@@ -15,10 +35,11 @@ export interface User {
   username: string;
   password?: string;
   phone: string;
-  address?: string; // Added address field
+  address?: string;
   orderCount: number;
   debt: number;
-  orderCounter?: number; // Counter for sequential order numbers
+  orderCounter?: number;
+  tenantId: string; // Added
 }
 
 export interface Representative {
@@ -28,6 +49,7 @@ export interface Representative {
   password: string;
   phone: string;
   assignedOrders: number;
+  tenantId: string; // Added
 }
 
 export type OrderStatus =
@@ -45,7 +67,7 @@ export type OrderStatus =
 
 export interface Order {
   id: string;
-  invoiceNumber: string; // The new sequential invoice number per user
+  invoiceNumber: string;
   trackingId: string;
   userId: string;
   customerName: string;
@@ -54,7 +76,7 @@ export interface Order {
   remainingAmount: number;
   status: OrderStatus;
   productLinks: string;
-  exchangeRate: number; // Exchange rate at the time of order creation
+  exchangeRate: number;
   // Optional detailed fields from form
   purchasePriceUSD?: number;
   downPaymentLYD?: number;
@@ -63,13 +85,13 @@ export interface Order {
   pricePerKiloCurrency?: 'LYD' | 'USD';
   customerWeightCost?: number;
   customerWeightCostCurrency?: 'LYD' | 'USD';
-  companyWeightCost?: number; // Total cost paid by company (kept for backward compatibility or if LYD is strictly needed)
-  companyWeightCostUSD?: number; // Total cost paid by company in USD
-  companyPricePerKilo?: number; // Cost per kilo for company (LYD - deprecated/optional)
-  companyPricePerKiloUSD?: number; // Cost per kilo for company in USD
-  customerPricePerKilo?: number; // Price per kilo for customer (LYD)
-  addedCostUSD?: number; // New field for additional costs in USD
-  addedCostNotes?: string; // Notes for the added cost
+  companyWeightCost?: number;
+  companyWeightCostUSD?: number;
+  companyPricePerKilo?: number;
+  companyPricePerKiloUSD?: number;
+  customerPricePerKilo?: number;
+  addedCostUSD?: number;
+  addedCostNotes?: string;
   store?: string;
   paymentMethod?: string;
   deliveryDate?: string | null; // ISO String
@@ -77,10 +99,11 @@ export interface Order {
   shippingCostLYD?: number;
   representativeId?: string | null;
   representativeName?: string | null;
-  customerAddress?: string; // Added for representative view
-  customerPhone?: string; // Added for representative view
-  collectedAmount?: number; // Amount collected by representative
+  customerAddress?: string;
+  customerPhone?: string;
+  collectedAmount?: number;
   customerWeightCostUSD?: number;
+  tenantId: string; // Added
 }
 
 
@@ -94,6 +117,7 @@ export interface Transaction {
   status: OrderStatus | 'paid';
   amount: number;
   description: string;
+  tenantId: string; // Added
 }
 
 export interface SubOrder {
@@ -112,15 +136,15 @@ export interface SubOrder {
   selectedStore: string;
   manualStoreName: string;
   productLinks: string;
-  operationDate?: string; // ISO String
-  deliveryDate?: string; // ISO String
+  operationDate?: string;
+  deliveryDate?: string;
   itemDescription: string;
   weightKG: number;
   pricePerKiloUSD: number;
   remainingAmount: number;
   representativeId?: string | null;
   representativeName?: string | null;
-  invoiceName?: string; // For providing context in rep dashboard
+  invoiceName?: string;
 }
 
 export interface TempOrder {
@@ -130,10 +154,11 @@ export interface TempOrder {
   remainingAmount: number;
   status: OrderStatus;
   subOrders: SubOrder[];
-  createdAt: string; // ISO String of when it was created
+  createdAt: string;
   assignedUserId?: string | null;
   assignedUserName?: string | null;
-  parentInvoiceId?: string | null; // The ID of the main order it's converted to
+  parentInvoiceId?: string | null;
+  tenantId: string; // Added
 }
 
 export interface Message {
@@ -149,9 +174,10 @@ export interface Conversation {
   userName: string;
   userAvatar: string;
   lastMessage: string;
-  lastMessageTime: string; // ISO string
+  lastMessageTime: string;
   unreadCount: number;
   messages: Message[];
+  tenantId: string; // Added
 }
 
 export interface Notification {
@@ -161,19 +187,22 @@ export interface Notification {
   userId: string | null;
   timestamp: string;
   isRead: boolean;
+  tenantId?: string; // Added (Optional because some might be system-wide potentially, but usually scoped)
 }
 
 export interface AppSettings {
   exchangeRate: number;
   pricePerKiloLYD: number;
   pricePerKiloUSD: number;
+  tenantId: string; // Added
 }
 
 export interface Expense {
   id: string;
   description: string;
   amount: number;
-  date: string; // ISO String
+  date: string;
+  tenantId: string; // Added (Was missing from original types in previous step, assuming it exists or should exist)
 }
 
 export type DepositStatus = 'pending' | 'collected' | 'cancelled';
@@ -184,13 +213,14 @@ export interface Deposit {
   customerName: string;
   customerPhone: string;
   amount: number;
-  date: string; // ISO String
+  date: string;
   description: string;
   status: DepositStatus;
   representativeId: string | null;
   representativeName: string | null;
   collectedBy: 'admin' | 'representative';
   collectedDate: string | null;
+  tenantId: string; // Added
 }
 
 export type ExternalDebtStatus = 'pending' | 'paid' | 'payment';
@@ -200,9 +230,10 @@ export interface ExternalDebt {
   creditorId: string;
   creditorName: string;
   amount: number;
-  date: string; // ISO String
+  date: string;
   status: ExternalDebtStatus;
   notes: string;
+  tenantId: string; // Added
 }
 
 export interface Creditor {
@@ -212,13 +243,14 @@ export interface Creditor {
   currency: 'LYD' | 'USD';
   totalDebt: number;
   contactInfo?: string;
+  tenantId: string; // Added
 }
 
 
 export interface ManualShippingLabel {
   id: string;
   invoiceNumber: string;
-  operationDate: string; // ISO String
+  operationDate: string;
   customerName: string;
   customerAddress: string;
   customerPhone: string;
@@ -240,5 +272,6 @@ export interface InstantSale {
   saleExchangeRate: number;
   finalSalePriceLYD: number;
   netProfit: number;
-  createdAt: string; // ISO String
+  createdAt: string;
+  tenantId: string; // Added
 }

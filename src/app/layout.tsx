@@ -3,32 +3,6 @@ import { Cairo } from 'next/font/google';
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 
-// Polyfill localStorage for SSR if needed
-if (typeof window === 'undefined') {
-  const noop = () => { };
-  const storageMock = {
-    getItem: () => null,
-    setItem: noop,
-    removeItem: noop,
-    clear: noop,
-    length: 0,
-    key: () => null,
-  };
-
-  try {
-    if (typeof global.localStorage === 'undefined' || typeof global.localStorage.getItem !== 'function') {
-      Object.defineProperty(global, 'localStorage', {
-        value: storageMock,
-        writable: true,
-        configurable: true
-      });
-    }
-  } catch (e) {
-    console.error('Failed to polyfill localStorage:', e);
-  }
-}
-
-
 const cairo = Cairo({
   subsets: ['arabic'],
   display: 'swap',
@@ -36,8 +10,8 @@ const cairo = Cairo({
 });
 
 export const metadata: Metadata = {
-  title: "تمويل",
-  description: "منظومة تمويل لإدارة الشحنات والعملاء",
+  title: "هوية",
+  description: "منظومة هوية لإدارة الشحنات والعملاء",
 };
 
 export default function RootLayout({
@@ -47,7 +21,7 @@ export default function RootLayout({
 }>) {
 
   return (
-    <html lang="ar" dir="rtl" className={cairo.variable}>
+    <html lang="ar" dir="rtl" className={cairo.variable} suppressHydrationWarning>
       <head>
         {/* Next.js will automatically handle the favicon if it's placed in the app directory. */}
       </head>

@@ -26,6 +26,7 @@ import {
   Download,
   BookUser,
   Zap,
+  Key,
 } from 'lucide-react';
 import Image from 'next/image';
 import logo from '@/app/assets/logo.png';
@@ -44,6 +45,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 const navItems = [
   { href: '/admin/dashboard', icon: Home, label: 'لوحة التحكم', permissionId: 'dashboard' },
+  { href: '/admin/super', icon: Key, label: 'إدارة التراخيص', permissionId: 'super_admin' }, // Added
   { href: '/admin/users', icon: Users, label: 'إدارة المستخدمين', permissionId: 'users' },
   { href: '/admin/employees', icon: Briefcase, label: 'إدارة المدراء', permissionId: 'employees' },
   { href: '/admin/representatives', icon: Bike, label: 'إدارة المندوبين', permissionId: 'representatives' },
@@ -64,6 +66,7 @@ const navItems = [
 const getPageTitle = (pathname: string): string => {
   const pageTitles: { [key: string]: string } = {
     '/admin/dashboard': 'لوحة التحكم الرئيسية',
+    '/admin/super': 'لوحة تحكم النظام (Super Admin)', // Added
     '/admin/users': 'إدارة المستخدمين',
     '/admin/employees': 'إدارة المدراء',
     '/admin/representatives': 'إدارة المندوبين',
@@ -155,7 +158,7 @@ export default function AdminLayout({
 
   const visibleNavItems = navItems.filter(item => {
     if (item.permissionId === 'dashboard') return true;
-    const isSuperAdmin = currentManager?.username === 'admin@tamweelsys.app';
+    const isSuperAdmin = currentManager?.username === 'admin@huwiyya.ly';
     if (isSuperAdmin) return true;
     return currentManager?.permissions?.includes(item.permissionId);
   });
@@ -224,7 +227,7 @@ export default function AdminLayout({
               <div className="relative w-10 h-10 flex items-center justify-center bg-gradient-to-br from-primary to-accent rounded-xl shadow-lg shadow-primary/20 group-hover:shadow-primary/40 transition-all duration-500">
                 <Image src={logo} alt="Logo" width={28} height={28} className="brightness-0 invert" />
               </div>
-              <h1 className="text-2xl font-bold text-foreground tracking-tight">تمويل</h1>
+              <h1 className="text-2xl font-bold text-foreground tracking-tight">هوية</h1>
             </Link>
             <Button
               variant="ghost"

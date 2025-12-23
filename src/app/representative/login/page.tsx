@@ -50,6 +50,9 @@ export default function RepresentativeLoginPage() {
           description: `مرحباً بك أيها المندوب، ${representative.name}`,
         });
         localStorage.setItem('loggedInUser', JSON.stringify({ id: representative.id, type: 'representative' }));
+        import('@/lib/actions').then(actions => {
+          actions.createSession({ userId: representative.id, tenantId: representative.tenantId, role: 'representative' });
+        });
         router.push("/representative/dashboard");
       } else {
         toast({
@@ -66,7 +69,7 @@ export default function RepresentativeLoginPage() {
         variant: "destructive",
       });
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
   };
 
@@ -81,8 +84,8 @@ export default function RepresentativeLoginPage() {
 
           <div className="mb-6">
             <h1 className="text-4xl font-bold mb-2 text-foreground flex items-center justify-center gap-2">
-                <Bike />
-                بوابة المندوب
+              <Bike />
+              بوابة المندوب
             </h1>
             <p className="text-muted-foreground">سجل الدخول للمتابعة</p>
           </div>
@@ -112,10 +115,10 @@ export default function RepresentativeLoginPage() {
               disabled={isLoading}
             >
               {isLoading ? (
-                  <>
-                      <Loader2 className="ml-2 h-5 w-5 animate-spin" />
-                      جاري التحقق...
-                  </>
+                <>
+                  <Loader2 className="ml-2 h-5 w-5 animate-spin" />
+                  جاري التحقق...
+                </>
               ) : 'تسجيل الدخول'}
             </Button>
           </form>

@@ -34,8 +34,8 @@ const allDashboardItems = [
         description: "عرض وتحديث حالات الطلبات الجديدة.",
         icon: ShoppingCart,
         href: "/admin/orders",
-        color: "text-blue-400",
-        gradient: "from-blue-500/20 to-cyan-500/20"
+        color: "text-violet-400",
+        gradient: "from-violet-500/20 to-purple-500/20"
     },
     {
         title: "إدارة المستخدمين",
@@ -258,7 +258,7 @@ const AdminDashboardPage = () => {
 
                 <motion.div variants={itemVariant}>
                     <Link href="/admin/orders/add">
-                        <Button className="h-12 px-6 rounded-xl bg-gradient-to-r from-primary to-blue-600 hover:from-primary/80 hover:to-blue-600/80 shadow-lg shadow-primary/25 text-lg font-bold">
+                        <Button className="h-12 px-6 rounded-xl bg-gradient-to-r from-primary to-purple-600 hover:from-primary/80 hover:to-purple-600/80 shadow-lg shadow-primary/25 text-lg font-bold">
                             <Zap className="mr-2 h-5 w-5 fill-white" />
                             طلب جديد
                         </Button>
@@ -351,7 +351,7 @@ const AdminDashboardPage = () => {
                                     <div className="w-full md:w-1/2 h-[300px]">
                                         <PremiumDonutChart
                                             data={[
-                                                { name: "صافي الأرباح", value: dailyData.netProfit > 0 ? dailyData.netProfit : 0, color: "#38bdf8" }, // Sky Blue
+                                                { name: "صافي الأرباح", value: dailyData.netProfit > 0 ? dailyData.netProfit : 0, color: "#4516a4" }, // Brand Violet
                                                 { name: "المصاريف", value: dailyData.expenses, color: "#ef4444" }, // Red
                                                 { name: "تكلفة المبيعات", value: dailyData.revenue - dailyData.netProfit - dailyData.expenses, color: "#a855f7" } // Purple (approx purchase cost)
                                             ].filter(d => d.value > 0)}
@@ -361,11 +361,11 @@ const AdminDashboardPage = () => {
                                     </div>
                                     <div className="flex flex-col gap-4 w-full md:w-auto p-4">
                                         <div className="flex items-center gap-3">
-                                            <div className="w-4 h-4 rounded-full bg-[#38bdf8] shadow-[0_0_10px_#38bdf8]" />
+                                            <div className="w-4 h-4 rounded-full bg-[#4516a4] shadow-[0_0_10px_#4516a4]" />
                                             <div>
                                                 <div>
                                                     <p className="text-muted-foreground text-sm">صافي الأرباح</p>
-                                                    <p className="text-xl font-bold text-foreground bg-clip-text text-transparent bg-gradient-to-r from-sky-400 to-blue-500">
+                                                    <p className="text-xl font-bold text-foreground bg-clip-text text-transparent bg-gradient-to-r from-violet-600 to-purple-500">
                                                         {(dailyData.netProfit > 0 ? dailyData.netProfit : 0).toLocaleString()} <span className="text-xs">د.ل</span>
                                                     </p>
                                                 </div>

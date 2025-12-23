@@ -4,7 +4,45 @@
 
 import { dbAdapter } from "./db-adapter";
 import { where, increment, arrayUnion } from "./db-adapter";
+import { cookies } from 'next/headers';
+import crypto from 'crypto'; // Import crypto to ensure availability
 import { Manager, User, Representative, Order, Transaction, TempOrder, Conversation, Message, Notification, AppSettings, OrderStatus, Expense, Deposit, DepositStatus, ExternalDebt, Creditor, ManualShippingLabel, SubOrder, InstantSale } from "./types";
+
+// --- Session & Multi-tenancy Helpers ---
+const COOKIE_NAME = 'huwiyya_session';
+
+export async function createSession(data: { userId: string, tenantId: string, role: string }) {
+    (await cookies()).set(COOKIE_NAME, JSON.stringify(data), {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 60 * 60 * 24 * 14, // 14 days
+        path: '/',
+    });
+}
+
+export async function getSession() {
+    const cookieStore = await cookies();
+    const sessionStr = cookieStore.get(COOKIE_NAME)?.value;
+    if (!sessionStr) return null;
+    try {
+        return JSON.parse(sessionStr);
+    } catch (e) {
+        return null;
+    }
+}
+
+export async function getCurrentTenantId() {
+    const session = await getSession();
+    // Allow SUPER_ADMIN (admin@huwiyya.ly) to bypass or see all? 
+    // For now, let's assume specific logic if needed, but standard functions need tenantId.
+    // Use a special 'ALL' or handle null in specific admin functions if needed.
+    return session?.tenantId || null;
+}
+
+export async function logoutSession() {
+    (await cookies()).delete(COOKIE_NAME);
+}
+
 
 // Map adapter methods to Firebase names for minimal code changes
 const db = dbAdapter;
@@ -164,7 +202,12 @@ export async function recalculateUserStats(userId: string): Promise<void> {
 // --- Settings Actions ---
 export async function getAppSettings(): Promise<AppSettings> {
     try {
-        const settingsRef = doc(db, SETTINGS_COLLECTION, 'main');
+        const tenantId = await getCurrentTenantId();
+        // Settings are per tenant. using 'main_' + tenantId as ID or query.
+        // Let's use ID = tenantId for settings.
+        if (!tenantId) return { exchangeRate: 1, pricePerKiloLYD: 0, pricePerKiloUSD: 0, tenantId: '' };
+
+        const settingsRef = doc(db, SETTINGS_COLLECTION, tenantId);
         const docSnap = await getDoc(settingsRef);
 
         const defaults: AppSettings = {
@@ -194,7 +237,9 @@ export async function getAppSettings(): Promise<AppSettings> {
 // Added for export
 export async function getRawAppSettings(): Promise<Partial<AppSettings>> {
     try {
-        const settingsRef = doc(db, SETTINGS_COLLECTION, 'main');
+        const tenantId = await getCurrentTenantId();
+        if (!tenantId) return {};
+        const settingsRef = doc(db, SETTINGS_COLLECTION, tenantId);
         const docSnap = await getDoc(settingsRef);
         return docSnap.exists() ? docSnap.data() : {};
     } catch (error) {
@@ -206,7 +251,9 @@ export async function getRawAppSettings(): Promise<Partial<AppSettings>> {
 
 export async function updateAppSettings(data: Partial<AppSettings>): Promise<boolean> {
     try {
-        const settingsRef = doc(db, SETTINGS_COLLECTION, 'main');
+        const tenantId = await getCurrentTenantId();
+        if (!tenantId) return false;
+        const settingsRef = doc(db, SETTINGS_COLLECTION, tenantId);
         // Use set with merge option to create the document if it doesn't exist, or update it if it does.
         await setDoc(settingsRef, data, { merge: true });
         return true;
@@ -219,18 +266,45 @@ export async function updateAppSettings(data: Partial<AppSettings>): Promise<boo
 
 // --- Manager Actions ---
 export async function ensureDefaultAdminExists() {
-    const defaultUsername = 'admin@tamweelsys.app';
+    const defaultUsername = 'admin@huwiyya.ly';
     const docRef = doc(db, MANAGERS_COLLECTION, defaultUsername); // Use email as ID for simplicity
     const docSnap = await getDoc(docRef);
 
     if (!docSnap.exists()) {
         console.log("Default admin not found, creating one...");
+
+        // Ensure default tenant exists
+        // We use a fixed UUID for the system tenant to ensure consistency
+        const systemTenantId = '00000000-0000-0000-0000-000000000000';
+
+        try {
+            // Check if system tenant exists directly via SQL query if possible, or via adapter
+            // Using DB Adapter for abstraction
+            const tenantRef = dbAdapter.doc('tenants', systemTenantId);
+            const tenantSnap = await tenantRef.get();
+
+            if (!tenantSnap.exists()) {
+                const systemTenant = {
+                    id: systemTenantId,
+                    name: 'System Tenant',
+                    subscriptionEndDate: new Date(Date.now() + 1000 * 60 * 60 * 24 * 365 * 100).toISOString(), // 100 years
+                    isActive: true,
+                    createdAt: new Date().toISOString()
+                };
+                await tenantRef.set(systemTenant);
+                console.log("System tenant created.");
+            }
+        } catch (e) {
+            console.error("Error ensuring system tenant:", e);
+        }
+
         const defaultAdmin: Omit<Manager, 'id'> = {
             name: 'المدير العام',
             username: defaultUsername,
-            password: '0920064400',
+            password: 'Gz6dnlh3..',
             phone: '0920064400',
-            permissions: ['users', 'employees', 'representatives', 'orders', 'shipping_label', 'temporary_users', 'financial_reports', 'instant_sales', 'deposits', 'expenses', 'creditors', 'support', 'notifications', 'exchange_rate', 'data_export']
+            permissions: ['super_admin', 'users', 'employees', 'representatives', 'orders', 'shipping_label', 'temporary_users', 'financial_reports', 'instant_sales', 'deposits', 'expenses', 'creditors', 'support', 'notifications', 'exchange_rate', 'data_export'],
+            tenantId: '00000000-0000-0000-0000-000000000000' // Matches systemTenantId
         };
         try {
             await setDoc(docRef, defaultAdmin);
@@ -238,13 +312,31 @@ export async function ensureDefaultAdminExists() {
         } catch (error) {
             console.error("Error creating default admin:", error);
         }
+    } else {
+        // [NEW] Update existing admin to have super_admin permission
+        const data = docSnap.data() as Manager;
+        if (!data.permissions?.includes('super_admin')) {
+            const updatedPermissions = [...(data.permissions || []), 'super_admin'];
+            await updateDoc(docRef, { permissions: updatedPermissions });
+            console.log("Added super_admin permission to existing admin.");
+        }
     }
 }
 
 
 export async function getManagers(): Promise<Manager[]> {
     try {
-        const querySnapshot = await getDocs(collection(db, MANAGERS_COLLECTION));
+        // Super Admin might want to see all, but for now scope to tenant if needed?
+        // Actually managers manage a tenant. A tenant has ONE manager usually, or multiple.
+        // If we are logged in as a Manager of Tenant A, we see other managers of Tenant A?
+        const tenantId = await getCurrentTenantId();
+        if (!tenantId) return []; // Or return all if super admin?
+
+        const q = query(
+            collection(db, MANAGERS_COLLECTION),
+            where("tenantId", "==", tenantId)
+        );
+        const querySnapshot = await getDocs(q);
         return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Manager));
     } catch (error) {
         console.error("Error getting managers:", error);
@@ -255,17 +347,32 @@ export async function getManagers(): Promise<Manager[]> {
 export async function getManagerById(managerId: string): Promise<Manager | null> {
     try {
         // Because we might be using email as ID for default admin
-        const managerRef = doc(db, MANAGERS_COLLECTION, managerId);
+        // Handle weird cases where ID might have spaces or casing
+        const cleanId = managerId.trim();
+        const managerRef = doc(db, MANAGERS_COLLECTION, cleanId);
         const docSnap = await getDoc(managerRef);
         if (docSnap.exists()) {
-            return { id: docSnap.id, ...docSnap.data() } as Manager;
+            const data = docSnap.data();
+            // Map DB snake_case to TS camelCase if needed
+            return {
+                id: docSnap.id,
+                ...data,
+                tenantId: data.tenantId || data.tenant_id,
+                permissions: data.permissions || []
+            } as Manager;
         }
         // Fallback for old IDs that might not be the email
         const q = query(collection(db, MANAGERS_COLLECTION), where("id", "==", managerId));
         const querySnapshot = await getDocs(q);
         if (!querySnapshot.empty) {
             const oldDoc = querySnapshot.docs[0];
-            return { id: oldDoc.id, ...oldDoc.data() } as Manager;
+            const data = oldDoc.data();
+            return {
+                id: oldDoc.id,
+                ...data,
+                tenantId: data.tenantId || data.tenant_id,
+                permissions: data.permissions || []
+            } as Manager;
         }
 
         return null;
@@ -295,7 +402,19 @@ export async function getManagerByUsername(username: string): Promise<Manager | 
 
 export async function addManager(manager: Omit<Manager, 'id'>): Promise<Manager | null> {
     try {
-        const docRef = await addDoc(collection(db, MANAGERS_COLLECTION), manager);
+        const tenantId = await getCurrentTenantId();
+        // If we are super admin creating a manager, we might pass tenantId in manager object?
+        // But the type Omit<Manager, 'id'> includes tenantId.
+        // So we strictly use what is passed (likely from registration flow which we'll build).
+        // If no tenantId is provided in data, use current (if one manager adding another).
+        const finalData = { ...manager, tenantId: manager.tenantId || tenantId };
+
+        if (!finalData.tenantId) {
+            console.error("Cannot add manager without tenantId");
+            return null;
+        }
+
+        const docRef = await addDoc(collection(db, MANAGERS_COLLECTION), finalData);
         return { id: docRef.id, ...manager };
     } catch (error) {
         console.error("Error adding manager:", error);
@@ -328,7 +447,11 @@ export async function deleteManager(managerId: string): Promise<boolean> {
 
 export async function getUsers(): Promise<User[]> {
     try {
-        const querySnapshot = await getDocs(collection(db, USERS_COLLECTION));
+        const tenantId = await getCurrentTenantId();
+        if (!tenantId) return [];
+
+        const q = query(collection(db, USERS_COLLECTION), where("tenantId", "==", tenantId));
+        const querySnapshot = await getDocs(q);
         return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
     } catch (error) {
         console.error("Error getting users:", error);
@@ -372,9 +495,24 @@ export async function getUserById(userId: string): Promise<User | null> {
 
 export async function getOrdersByUserId(userId: string): Promise<Order[]> {
     try {
+        const tenantId = await getCurrentTenantId();
+        // We might not need to filter by tenantId IF userId is unique globally or we trust userId belongs to tenant.
+        // But to be safe, we can add it.
+        // Actually, if we just query by userId, and user is in our tenant (checked by getUser?), it's effectively isolated.
+        // But let's add tenantId filter for strictness if possible.
+        // However, standard query takes list of conditions.
+
+        // Let's rely on userId uniqueness or pre-check. 
+        // BETTER: user IDs are generic UUIDs? If so unique.
+        // If IDs are simple strings, collisions possible.
+        // Let's add tenantId condition if order has it.
+
+        const conditions = [where("userId", "==", userId)];
+        if (tenantId) conditions.push(where("tenantId", "==", tenantId));
+
         const q = query(
             collection(db, ORDERS_COLLECTION),
-            where("userId", "==", userId)
+            ...conditions
         );
         const querySnapshot = await getDocs(q);
         const orders = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
@@ -403,7 +541,11 @@ export async function getUserByPhone(phone: string): Promise<User | null> {
 
 export async function addUser(user: Omit<User, 'id'>): Promise<User | null> {
     try {
-        const docRef = await addDoc(collection(db, USERS_COLLECTION), user);
+        const tenantId = await getCurrentTenantId();
+        if (!tenantId && !user.tenantId) return null;
+
+        const finalData = { ...user, tenantId: user.tenantId || tenantId };
+        const docRef = await addDoc(collection(db, USERS_COLLECTION), finalData);
         return { id: docRef.id, ...user };
     } catch (error) {
         console.error("Error adding user:", error);
@@ -437,7 +579,10 @@ export async function deleteUser(userId: string): Promise<boolean> {
 
 export async function getRepresentatives(): Promise<Representative[]> {
     try {
-        const querySnapshot = await getDocs(collection(db, REPRESENTATIVES_COLLECTION));
+        const tenantId = await getCurrentTenantId();
+        if (!tenantId) return [];
+        const q = query(collection(db, REPRESENTATIVES_COLLECTION), where("tenantId", "==", tenantId));
+        const querySnapshot = await getDocs(q);
         return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Representative));
     } catch (error) {
         console.error("Error getting representatives:", error);
@@ -476,7 +621,10 @@ export async function getRepresentativeByUsername(username: string): Promise<Rep
 
 export async function addRepresentative(rep: Omit<Representative, 'id'>): Promise<Representative | null> {
     try {
-        const docRef = await addDoc(collection(db, REPRESENTATIVES_COLLECTION), rep);
+        const tenantId = await getCurrentTenantId();
+        if (!tenantId) return null;
+        const finalData = { ...rep, tenantId };
+        const docRef = await addDoc(collection(db, REPRESENTATIVES_COLLECTION), finalData);
         return { id: docRef.id, ...rep };
     } catch (error) {
         console.error("Error adding representative:", error);
@@ -509,7 +657,10 @@ export async function deleteRepresentative(repId: string): Promise<boolean> {
 
 export async function getOrders(): Promise<Order[]> {
     try {
-        const querySnapshot = await getDocs(collection(db, ORDERS_COLLECTION));
+        const tenantId = await getCurrentTenantId();
+        if (!tenantId) return [];
+        const q = query(collection(db, ORDERS_COLLECTION), where("tenantId", "==", tenantId));
+        const querySnapshot = await getDocs(q);
         return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
     } catch (error) {
         console.error("Error getting orders:", error);
@@ -606,10 +757,14 @@ export async function addOrder(orderData: Omit<Order, 'id' | 'invoiceNumber'>): 
 
     // --- REFACTORED LOGIC ---
     try {
+        const tenantId = await getCurrentTenantId();
+        if (!tenantId) throw new Error("No tenant context");
+
         // 1. Find the highest existing sequence number
         const userOrdersQuery = query(
             collection(db, ORDERS_COLLECTION),
-            where("userId", "==", orderData.userId)
+            where("userId", "==", orderData.userId),
+            where("tenantId", "==", tenantId)
         );
         const userOrdersSnapshot = await getDocs(userOrdersQuery);
 
@@ -665,6 +820,7 @@ export async function addOrder(orderData: Omit<Order, 'id' | 'invoiceNumber'>): 
                 trackingId: finalTrackingId,
                 exchangeRate: settings.exchangeRate,
                 remainingAmount: remainingAmount,
+                tenantId: tenantId
             };
 
             const orderRef = doc(collection(db, ORDERS_COLLECTION));
@@ -680,7 +836,8 @@ export async function addOrder(orderData: Omit<Order, 'id' | 'invoiceNumber'>): 
                 type: 'order',
                 status: finalOrderData.status,
                 amount: finalOrderData.sellingPriceLYD,
-                description: `إنشاء طلب جديد ${invoiceNumber}`
+                description: `إنشاء طلب جديد ${invoiceNumber}`,
+                tenantId: tenantId
             });
 
             // If there's a down payment, create a separate payment transaction
@@ -694,7 +851,8 @@ export async function addOrder(orderData: Omit<Order, 'id' | 'invoiceNumber'>): 
                     type: 'payment',
                     status: 'paid',
                     amount: finalOrderData.downPaymentLYD,
-                    description: `دفعة مقدمة للطلب ${invoiceNumber}`
+                    description: `دفعة مقدمة للطلب ${invoiceNumber}`,
+                    tenantId: tenantId
                 });
             }
 
@@ -1976,6 +2134,184 @@ export async function deleteExternalDebt(debtId: string): Promise<boolean> {
     return true;
 }
 
+
+// --- Multi-tenancy & Licensing Actions ---
+
+export async function generateLicense(durationDays: number = 14): Promise<{ success: boolean, key?: string, error?: string }> {
+    try {
+        const session = await getSession();
+        let tenantId = session?.tenantId;
+        const userId = session?.userId;
+
+        let debugMsg = `Session: ${!!session}, TID: ${tenantId}, UID: ${userId}`;
+
+        console.log(`[generateLicense] Checking Auth. ${debugMsg}`);
+
+        // Strict Check: Either correct System Tenant ID OR specifically the Super Admin User
+        const SYSTEM_TENANT_ID = '00000000-0000-0000-0000-000000000000';
+        const SUPER_ADMIN_EMAIL = 'admin@huwiyya.ly';
+
+        let isAuthorized = false;
+
+        // Normalize tenantId check
+        if (tenantId === SYSTEM_TENANT_ID) {
+            console.log("[generateLicense] Authorized by System Tenant ID.");
+            isAuthorized = true;
+        } else if (userId) {
+            console.log("[generateLicense] Tenant mismatch or missing. Attempting User Fallback...");
+            const manager = await getManagerById(userId);
+            if (manager) {
+                // Ensure we check mapped tenantId
+                const managerTenantId = manager.tenantId || (manager as any).tenant_id;
+                debugMsg += ` | DB User: ${manager.username}, Permissions: ${manager.permissions?.join(',')}, TenantID: ${managerTenantId}`;
+                console.log(`[generateLicense] User found. ${debugMsg}`);
+
+                if (manager.username === SUPER_ADMIN_EMAIL) {
+                    console.log("[generateLicense] Authorized by Super Admin Username.");
+                    isAuthorized = true;
+                } else if (managerTenantId === SYSTEM_TENANT_ID) {
+                    console.log("[generateLicense] Authorized by Manager Tenant ID.");
+                    isAuthorized = true;
+                } else {
+                    console.log(`[generateLicense] Failed: User ${manager.username} is not ${SUPER_ADMIN_EMAIL} and Tenant ${managerTenantId} is not System.`);
+                }
+            } else {
+                console.log("[generateLicense] Failed: Manager not found for userId:", userId);
+            }
+        } else {
+            console.log("[generateLicense] Failed: No Tenant ID and No User ID in session.");
+        }
+
+        if (!isAuthorized) {
+            console.error(`[generateLicense] ACCESS DENIED. Debug: ${debugMsg}`);
+            return { success: false, error: `Unauthorized. Debug: ${debugMsg}` };
+        }
+
+        const key = Math.random().toString(36).substring(2, 15).toUpperCase(); // Simple key generation for now
+        const licenseData: any = {
+            id: crypto.randomUUID(),
+            key,
+            duration_days: durationDays,
+            status: 'active',
+            created_at: new Date().toISOString()
+        };
+
+        // Assuming we have a 'licenses' collection or table now 
+        await addDoc('licenses', licenseData);
+        return { success: true, key };
+
+    } catch (error: any) {
+        console.error("Error generating license:", error);
+        return { success: false, error: error.message || "Unknown error" };
+    }
+}
+
+export async function validateLicense(key: string): Promise<any | null> {
+    try {
+        const q = query(collection(db, 'licenses'), where("key", "==", key), where("status", "==", "active"));
+        const snapshot = await getDocs(q);
+        if (snapshot.empty) return null;
+        return { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+    } catch (error) {
+        console.error("Error validating license:", error);
+        return null;
+    }
+}
+
+export async function registerTenant(managerData: Omit<Manager, 'id' | 'tenantId' | 'permissions'>, licenseKey: string): Promise<{ success: boolean, message: string }> {
+    console.log("Starting registerTenant with key:", licenseKey);
+    try {
+        // 1. Validate License
+        console.log("Validating license...");
+        const license = await validateLicense(licenseKey);
+        if (!license) {
+            console.error("License validation failed: Invalid or expired key.");
+            return { success: false, message: "مفتاح التسجيل غير صالح أو منتهي الصلاحية." };
+        }
+        console.log("License validated:", license);
+
+        // 2. Create Tenant
+        // Calculate subscription end date
+        const endDate = new Date();
+        // license object comes from DB, so it uses snake_case
+        const duration = license.duration_days || license.durationDays || 14;
+        endDate.setDate(endDate.getDate() + duration);
+
+        // Generate a valid UUID for the tenant to satisfy Postgres UUID type
+        const newTenantId = crypto.randomUUID();
+
+        const tenantData: any = {
+            id: newTenantId,
+            name: `${managerData.name} Tenant`,
+            subscription_end_date: endDate.toISOString(),
+            is_active: true,
+            created_at: new Date().toISOString()
+        };
+
+        console.log("Creating tenant with data:", tenantData);
+        // addDoc in dbAdapter respects data.id if present
+        await addDoc('tenants', tenantData);
+        console.log("Tenant created with ID:", newTenantId);
+
+        // 3. Mark License as Used
+        console.log("Updating license status...");
+        await updateDoc(doc(db, 'licenses', license.id), {
+            status: 'used',
+            used_at: new Date().toISOString(),
+            used_by_tenant_id: newTenantId
+        });
+        console.log("License updated.");
+
+        // 4. Create Manager User
+        // Note: Managers table also expects tenant_id (snake_case) based on migration script
+
+        const newManager: any = {
+            ...managerData,
+            id: managerData.username, // Use email as ID (TEXT)
+            permissions: ['users', 'employees', 'representatives', 'orders', 'shipping_label', 'temporary_users', 'financial_reports', 'instant_sales', 'deposits', 'expenses', 'creditors', 'support', 'notifications', 'exchange_rate', 'data_export'], // Default permissions
+            tenant_id: newTenantId
+        };
+
+        console.log("Creating manager with data:", newManager, "in collection:", MANAGERS_COLLECTION);
+        // Use setDoc to ensure we set the ID as the key, OR addDoc with id in data works too.
+        // Let's use addDoc since we verified it uses data.id.
+        await addDoc(MANAGERS_COLLECTION, newManager);
+        console.log("Manager created.");
+
+        // Also initialize settings for this tenant?
+        console.log("Initializing settings...");
+        await setDoc(doc(db, SETTINGS_COLLECTION, newTenantId), {
+            exchangeRate: 1,
+            pricePerKiloLYD: 5, // Default values
+            pricePerKiloUSD: 1,
+            tenant_id: newTenantId
+        });
+        console.log("Settings initialized. Registration complete.");
+
+        return { success: true, message: "تم التسجيل بنجاح!" };
+
+    } catch (error: any) {
+        console.error("Error registering tenant (FULL DETAIL):", error);
+        if (error.code) console.error("Error Code:", error.code);
+        if (error.message) console.error("Error Message:", error.message);
+        if (error.details) console.error("Error Details:", error.details);
+        return { success: false, message: `فشل التسجيل: ${error.message || "خطأ غير معروف"} (Code: ${error.code || 'N/A'})` };
+    }
+}
+
+export async function getActiveLicenses(): Promise<any[]> {
+    try {
+        const tenantId = await getCurrentTenantId();
+        if (tenantId !== 'system') return [];
+
+        const q = query(collection(db, 'licenses')); // Get all
+        const snap = await getDocs(q);
+        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    } catch (e) {
+        console.error(e);
+        return [];
+    }
+}
 
 // --- Manual Shipping Label Actions ---
 
