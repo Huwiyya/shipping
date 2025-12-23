@@ -7,29 +7,29 @@ import { Creditor, ExternalDebt } from '@/lib/types';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import {
-  ArrowLeft,
-  DollarSign,
-  PlusCircle,
-  Trash2,
-  FileDown,
+    ArrowLeft,
+    DollarSign,
+    PlusCircle,
+    Trash2,
+    FileDown,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
 } from "@/components/ui/table";
 import { format } from 'date-fns';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -62,7 +62,7 @@ export function CreditorDetails({ initialCreditor, initialDebts }: CreditorDetai
         setCurrentDebt(debt);
         setIsDeleteConfirmOpen(true);
     };
-    
+
     const handleSaveDebt = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         const formData = new FormData(e.currentTarget);
@@ -73,7 +73,7 @@ export function CreditorDetails({ initialCreditor, initialDebts }: CreditorDetai
             toast({ title: "خطأ", description: "الرجاء إدخال مبلغ صحيح.", variant: 'destructive' });
             return;
         }
-        
+
         // debit means the entity owes us more (positive amount)
         // credit means we owe the entity more, or they paid us (negative amount)
         const finalAmount = type === 'debit' ? amount : -amount;
@@ -85,6 +85,7 @@ export function CreditorDetails({ initialCreditor, initialDebts }: CreditorDetai
             date: new Date().toISOString(),
             status: 'pending',
             notes: formData.get('notes') as string,
+            tenantId: 'default-tenant',
         };
 
         try {
@@ -103,11 +104,11 @@ export function CreditorDetails({ initialCreditor, initialDebts }: CreditorDetai
             toast({ title: "خطأ", description: "فشل حفظ الحركة المالية.", variant: 'destructive' });
         }
     };
-    
+
     const handleDeleteDebt = async () => {
         if (currentDebt) {
             const success = await deleteExternalDebt(currentDebt.id);
-            if(success) {
+            if (success) {
                 setDebts(debts.filter(d => d.id !== currentDebt.id));
                 const updatedCreditor = { ...creditor, totalDebt: creditor.totalDebt - currentDebt.amount };
                 setCreditor(updatedCreditor);
@@ -119,7 +120,7 @@ export function CreditorDetails({ initialCreditor, initialDebts }: CreditorDetai
         setIsDeleteConfirmOpen(false);
         setCurrentDebt(null);
     }
-    
+
     const currencySymbol = creditor.currency === 'USD' ? '$' : 'د.ل';
     const totalDebt = creditor.totalDebt || 0;
     const balanceText = totalDebt >= 0 ? 'المبلغ المستحق عليه' : 'المبلغ المستحق له';
@@ -129,7 +130,7 @@ export function CreditorDetails({ initialCreditor, initialDebts }: CreditorDetai
     return (
         <>
             <div className="flex justify-between items-center mb-6">
-                 <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4">
                     <Button variant="outline" size="icon" onClick={() => router.back()}>
                         <ArrowLeft className="w-6 h-6" />
                     </Button>
@@ -137,15 +138,15 @@ export function CreditorDetails({ initialCreditor, initialDebts }: CreditorDetai
                         <h1 className="text-2xl font-bold">{creditor.name}</h1>
                         <p className="text-sm text-muted-foreground">{creditor.type === 'company' ? 'شركة' : 'شخص'}</p>
                     </div>
-                 </div>
-                 <div className="flex items-center gap-2">
-                     <Button asChild variant="outline">
+                </div>
+                <div className="flex items-center gap-2">
+                    <Button asChild variant="outline">
                         <Link href={`/admin/creditors/print/${creditor.id}`} target="_blank">
-                             <FileDown className="ml-2 h-4 w-4" />
-                             تنزيل كشف حساب
+                            <FileDown className="ml-2 h-4 w-4" />
+                            تنزيل كشف حساب
                         </Link>
                     </Button>
-                 </div>
+                </div>
             </div>
 
             <Card className="mb-6">
@@ -163,7 +164,7 @@ export function CreditorDetails({ initialCreditor, initialDebts }: CreditorDetai
             <Card>
                 <CardHeader className="flex flex-row justify-between items-center">
                     <CardTitle>كشف الحساب</CardTitle>
-                     <Button size="sm" className="gap-1" onClick={() => openDebtDialog()}>
+                    <Button size="sm" className="gap-1" onClick={() => openDebtDialog()}>
                         <PlusCircle className="h-4 w-4" />
                         إضافة حركة مالية
                     </Button>
@@ -193,7 +194,7 @@ export function CreditorDetails({ initialCreditor, initialDebts }: CreditorDetai
                                             {!isDebit ? `${Math.abs(debt.amount).toFixed(2)} ${currencySymbol}` : '-'}
                                         </TableCell>
                                         <TableCell>
-                                             <Button variant="ghost" size="icon" onClick={() => openDeleteConfirm(debt)}>
+                                            <Button variant="ghost" size="icon" onClick={() => openDeleteConfirm(debt)}>
                                                 <Trash2 className="h-4 w-4 text-destructive" />
                                             </Button>
                                         </TableCell>
@@ -210,16 +211,16 @@ export function CreditorDetails({ initialCreditor, initialDebts }: CreditorDetai
                     </Table>
                 </CardContent>
             </Card>
-            
+
             {/* Debt Dialog */}
-             <Dialog open={isDebtDialogOpen} onOpenChange={(isOpen) => { setIsDebtDialogOpen(isOpen); if (!isOpen) setCurrentDebt(null); }}>
+            <Dialog open={isDebtDialogOpen} onOpenChange={(isOpen) => { setIsDebtDialogOpen(isOpen); if (!isOpen) setCurrentDebt(null); }}>
                 <DialogContent dir="rtl">
                     <form onSubmit={handleSaveDebt}>
                         <DialogHeader>
                             <DialogTitle>إضافة حركة مالية جديدة</DialogTitle>
                         </DialogHeader>
                         <div className="grid gap-4 py-4 text-right">
-                             <div className="space-y-2">
+                            <div className="space-y-2">
                                 <Label>نوع الحركة</Label>
                                 <RadioGroup name="type" defaultValue="debit" className="flex gap-4 pt-2">
                                     <div className="flex items-center space-x-2 space-x-reverse">
@@ -250,7 +251,7 @@ export function CreditorDetails({ initialCreditor, initialDebts }: CreditorDetai
             </Dialog>
 
             {/* Delete Debt Confirmation */}
-             <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
+            <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
                 <DialogContent dir='rtl'>
                     <DialogHeader>
                         <DialogTitle>تأكيد الحذف</DialogTitle>

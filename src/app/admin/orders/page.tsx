@@ -251,6 +251,7 @@ const AdminOrdersPage = () => {
       status: 'paid',
       amount: paymentAmount,
       description: description,
+      tenantId: 'default-tenant',
     });
     toast({ title: "تم تسجيل الدفعة بنجاح" });
     setIsPaymentDialogOpen(false);

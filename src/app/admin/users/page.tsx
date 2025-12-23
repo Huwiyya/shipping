@@ -155,6 +155,7 @@ const AdminUsersPage = () => {
           password: generatePassword(),
           orderCount: 0,
           debt: 0,
+          tenantId: 'default-tenant',
           ...userData
         };
         await addUser(newUserDataWithDefaults);
